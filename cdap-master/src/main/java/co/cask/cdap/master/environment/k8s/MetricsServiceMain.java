@@ -49,7 +49,7 @@ import javax.annotation.Nullable;
 /**
  * The main class to run metrics services, which includes both metrics processor and metrics query.
  */
-public class MetricsServiceMain extends AbstractServiceMain {
+public class MetricsServiceMain extends AbstractMasterServiceMain {
 
   /**
    * Main entry point

@@ -28,7 +28,6 @@ import co.cask.cdap.common.guice.DFSLocationModule;
 import co.cask.cdap.common.guice.IOModule;
 import co.cask.cdap.common.logging.LoggingContext;
 import co.cask.cdap.common.logging.LoggingContextAccessor;
-import co.cask.cdap.common.options.Option;
 import co.cask.cdap.common.options.OptionsParser;
 import co.cask.cdap.common.runtime.DaemonMain;
 import co.cask.cdap.common.utils.ProjectInfo;
@@ -42,7 +41,6 @@ import co.cask.cdap.master.environment.DefaultMasterEnvironmentContext;
 import co.cask.cdap.master.environment.MasterEnvironmentExtensionLoader;
 import co.cask.cdap.master.spi.environment.MasterEnvironment;
 import co.cask.cdap.metrics.guice.MetricsClientRuntimeModule;
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.Lists;
 import com.google.common.util.concurrent.Service;
 import com.google.inject.AbstractModule;
@@ -71,16 +69,20 @@ import java.util.function.Supplier;
 import javax.annotation.Nullable;
 
 /**
- * The abstract base class for writing various CDAP master service main classes.
+ * The abstract base class for writing various service main classes.
+ *
+ * @param <T> type of options supported by the service.
  */
-public abstract class AbstractServiceMain extends DaemonMain {
+public abstract class AbstractServiceMain<T extends EnvironmentOptions> extends DaemonMain {
 
   private static final Logger LOG = LoggerFactory.getLogger(AbstractServiceMain.class);
 
   private final List<Service> services = new ArrayList<>();
   private final List<AutoCloseable> closeableResources = new ArrayList<>();
-  private Injector injector;
-  private MasterEnvironment masterEnv;
+  protected MasterEnvironment masterEnv;
+  protected Injector injector;
+  protected CConfiguration cConf;
+  protected T options;
 
   /**
    * Helper method for sub-class to call from static void main.
@@ -118,26 +120,14 @@ public abstract class AbstractServiceMain extends DaemonMain {
     }
   }
 
-  @Override
-  public final void init(String[] args) throws MalformedURLException {
-    LOG.info("Initializing master service class {}", getClass().getName());
-
-    ConfigOptions opts = new ConfigOptions();
-    OptionsParser.init(opts, args, getClass().getSimpleName(), ProjectInfo.getVersion().toString(), System.out);
-
-    CConfiguration cConf = CConfiguration.create();
-    if (opts.extraConfPath != null) {
-      cConf.addResource(new File(opts.extraConfPath, "cdap-site.xml").toURI().toURL());
-    }
-
-    Configuration hConf = new Configuration();
+  protected static MasterEnvironment getInitializedMasterEnvironment(EnvironmentOptions options, CConfiguration cConf) {
 
     MasterEnvironmentExtensionLoader envExtLoader = new MasterEnvironmentExtensionLoader(cConf);
-    masterEnv = envExtLoader.get(opts.envProvider);
+    MasterEnvironment masterEnv = envExtLoader.get(options.getEnvProvider());
 
     if (masterEnv == null) {
       throw new IllegalArgumentException("Unable to find a MasterEnvironment implementation with name "
-                                           + opts.envProvider);
+                                           + options.getEnvProvider());
     }
 
     try {
@@ -145,6 +135,21 @@ public abstract class AbstractServiceMain extends DaemonMain {
     } catch (Exception e) {
       throw new RuntimeException("Exception raised when initializing master environment for " + masterEnv.getName(), e);
     }
+    return masterEnv;
+  }
+
+  @Override
+  public void init(String[] args) throws MalformedURLException {
+    options = createOptions();
+    OptionsParser.init(options, args, getClass().getSimpleName(), ProjectInfo.getVersion().toString(), System.out);
+
+    cConf = CConfiguration.create();
+    if (options.getExtraConfPath() != null) {
+      cConf.addResource(new File(options.getExtraConfPath(), "cdap-site.xml").toURI().toURL());
+    }
+    Configuration hConf = new Configuration();
+
+    masterEnv = getInitializedMasterEnvironment(options, cConf);
 
     List<Module> modules = new ArrayList<>();
     modules.add(new ConfigModule(cConf, hConf));
@@ -177,24 +182,16 @@ public abstract class AbstractServiceMain extends DaemonMain {
     // Add Services
     services.add(injector.getInstance(MetricsCollectionService.class));
     addServices(injector, services, closeableResources);
-
-    LOG.info("Master service {} initialized", getClass().getName());
   }
 
-  @Override
-  public final void start() {
-    LOG.info("Starting all services for master service {}", getClass().getName());
+  protected void startServices() {
     for (Service service : services) {
       LOG.info("Starting service {} in master service {}", service, getClass().getName());
       service.startAndWait();
     }
-    LOG.info("All services for master service {} started", getClass().getName());
   }
 
-  @Override
-  public final void stop() {
-    // Stop service in reverse order
-    LOG.info("Stopping all services for master service {}", getClass().getName());
+  protected void stopServices() {
     for (Service service : Lists.reverse(services)) {
       LOG.info("Stopping service {} in master service {}", service, getClass().getName());
       try {
@@ -213,8 +210,6 @@ public abstract class AbstractServiceMain extends DaemonMain {
         LOG.warn("Exception raised when closing resource {} in master service {}", closeable, getClass().getName(), e);
       }
     }
-
-    LOG.info("All services for master service {} stopped", getClass().getName());
   }
 
   @Override
@@ -222,11 +217,6 @@ public abstract class AbstractServiceMain extends DaemonMain {
     if (masterEnv != null) {
       masterEnv.destroy();
     }
-  }
-
-  @VisibleForTesting
-  Injector getInjector() {
-    return injector;
   }
 
   /**
@@ -271,17 +261,6 @@ public abstract class AbstractServiceMain extends DaemonMain {
   protected abstract LoggingContext getLoggingContext();
 
   /**
-   * Configuration class to help parsing command line arguments
-   */
-  private static final class ConfigOptions {
-    @Option(name = "env", usage = "Name of the CDAP master environment extension provider")
-    private String envProvider;
-
-    @Option(name = "conf", usage = "Directory path for CDAP configuration files")
-    private String extraConfPath;
-  }
-
-  /**
    * The class bridge a {@link Supplier} to Guice {@link Provider}.
    *
    * @param <T> type of the object provided by this {@link Provider}
@@ -299,6 +278,8 @@ public abstract class AbstractServiceMain extends DaemonMain {
       return supplier.get();
     }
   }
+
+  protected abstract T createOptions();
 
   /**
    * A {@link LogAppender} that just log with the current log appender.

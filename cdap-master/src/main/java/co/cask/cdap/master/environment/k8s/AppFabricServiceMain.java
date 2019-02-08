@@ -58,7 +58,7 @@ import javax.annotation.Nullable;
 /**
  * The main class to run app-fabric and other supporting services.
  */
-public class AppFabricServiceMain extends AbstractServiceMain {
+public class AppFabricServiceMain extends AbstractMasterServiceMain {
 
   @Override
   protected List<Module> getServiceModules() {

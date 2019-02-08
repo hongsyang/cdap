@@ -58,6 +58,7 @@ public class MasterServiceMainTestBase {
 
   private static InMemoryZKServer zkServer;
   private static Map<Class<?>, ServiceMainManager<?>> serviceManagers = new HashMap<>();
+  protected static String[] initArgs;
 
   @BeforeClass
   public static void init() throws Exception {
@@ -93,9 +94,9 @@ public class MasterServiceMainTestBase {
   /**
    * Gets the instance of master main service of the given class.
    */
-  static <T extends AbstractServiceMain> T getServiceMainInstance(Class<T> serviceMainClass) {
+  static <T extends AbstractMasterServiceMain> T getServiceMainInstance(Class<T> serviceMainClass) {
     ServiceMainManager<?> manager = serviceManagers.get(serviceMainClass);
-    AbstractServiceMain instance = manager.getInstance();
+    AbstractMasterServiceMain instance = manager.getInstance();
     if (!serviceMainClass.isInstance(instance)) {
       throw new IllegalArgumentException("Mismatch manager class." + serviceMainClass + " != " + instance);
     }
@@ -112,8 +113,8 @@ public class MasterServiceMainTestBase {
    * @return A {@link ServiceMainManager} to interface with the service instance
    * @throws Exception if failed to start the service
    */
-  private static <T extends AbstractServiceMain> ServiceMainManager<T> runMain(Class<T> serviceMainClass,
-                                                                               CConfiguration originalCConf)
+  private static <T extends AbstractMasterServiceMain> ServiceMainManager<T> runMain(Class<T> serviceMainClass,
+                                                                                     CConfiguration originalCConf)
     throws Exception {
 
     // Set a unique local data directory for each service
@@ -138,8 +139,9 @@ public class MasterServiceMainTestBase {
       cConf.writeXml(writer);
     }
 
+    initArgs = new String[] { "--env=mock", "--conf=" + confDir.getAbsolutePath() };
     T service = serviceMainClass.newInstance();
-    service.init(new String[] { "--env=mock", "--conf=" + confDir.getAbsolutePath() });
+    service.init(initArgs);
     service.start();
 
     return new ServiceMainManager<T>() {
@@ -160,7 +162,7 @@ public class MasterServiceMainTestBase {
    * Represents a started main service.
    * @param <T> type of the service main class
    */
-  private interface ServiceMainManager<T extends AbstractServiceMain> extends Cancellable {
+  private interface ServiceMainManager<T extends AbstractMasterServiceMain> extends Cancellable {
     T getInstance();
   }
 }

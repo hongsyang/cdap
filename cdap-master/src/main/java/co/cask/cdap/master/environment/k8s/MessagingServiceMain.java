@@ -37,7 +37,7 @@ import javax.annotation.Nullable;
 /**
  * Main class for running {@link MessagingService} in Kubernetes.
  */
-public class MessagingServiceMain extends AbstractServiceMain {
+public class MessagingServiceMain extends AbstractMasterServiceMain {
 
   /**
    * Main entry point

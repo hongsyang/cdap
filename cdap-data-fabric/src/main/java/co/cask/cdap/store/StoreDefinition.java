@@ -82,6 +82,9 @@ public final class StoreDefinition {
     if (overWrite || tableAdmin.getSpecification(LineageStore.PROGRAM_LINEAGE_TABLE) == null) {
       LineageStore.createTable(tableAdmin);
     }
+    if (overWrite || tableAdmin.getSpecification(FieldLineageStore.SUMMARY_FIELDS_TABLE) == null) {
+      FieldLineageStore.createTables(tableAdmin);
+    }
   }
 
   public static void createAllTables(StructuredTableAdmin tableAdmin, StructuredTableRegistry registry)
@@ -610,6 +613,7 @@ public final class StoreDefinition {
    * Schema for {@link LineageTable}.
    */
   public static final class LineageStore {
+
     public static final StructuredTableId DATASET_LINEAGE_TABLE = new StructuredTableId("dataset_lineage");
     public static final StructuredTableId PROGRAM_LINEAGE_TABLE = new StructuredTableId("program_lineage");
     public static final String NAMESPACE_FIELD = "namespace";
@@ -659,6 +663,74 @@ public final class StoreDefinition {
     public static void createTable(StructuredTableAdmin tableAdmin) throws IOException, TableAlreadyExistsException {
       tableAdmin.create(DATASET_LINEAGE_SPEC);
       tableAdmin.create(PROGRAM_LINEAGE_SPEC);
+    }
+  }
+
+  /**
+   *
+   */
+  public static final class FieldLineageStore {
+
+    public static final StructuredTableId ENDPOINT_CHECKSUM_TABLE = new StructuredTableId("fields_table");
+    public static final StructuredTableId OPERATIONS_TABLE = new StructuredTableId("operations_table");
+    public static final StructuredTableId DESTINATION_FIELDS_TABLE = new StructuredTableId("destination_fields_table");
+    public static final StructuredTableId SUMMARY_FIELDS_TABLE = new StructuredTableId("summary_fields_table");
+
+    public static final String DIRECTION_FIELD = "direction";
+    public static final String ENDPOINT_NAMESPACE_FIELD = "endpoint_namespace";
+    public static final String ENDPOINT_NAME_FIELD = "endpoint";
+    public static final String START_TIME_FIELD = "start_time";
+    public static final String CHECKSUM_FIELD = "checksum";
+    public static final String PROGRAM_RUN_FIELD = "program_run";
+    public static final String OPERATIONS_FIELD = "operations";
+    public static final String DESTINATION_DATA_FIELD = "destination_data";
+    public static final String ENDPOINT_FIELD = "endpoint_field";
+
+    public static final StructuredTableSpecification ENDPOINT_CHECKSUM_SPEC =
+      new StructuredTableSpecification.Builder()
+        .withId(ENDPOINT_CHECKSUM_TABLE)
+        .withFields(Fields.stringType(DIRECTION_FIELD),
+                    Fields.stringType(ENDPOINT_NAMESPACE_FIELD),
+                    Fields.stringType(ENDPOINT_NAME_FIELD),
+                    Fields.longType(START_TIME_FIELD),
+                    Fields.longType(CHECKSUM_FIELD),
+                    Fields.stringType(PROGRAM_RUN_FIELD))
+        .withPrimaryKeys(DIRECTION_FIELD, ENDPOINT_NAMESPACE_FIELD, ENDPOINT_NAME_FIELD, START_TIME_FIELD)
+        .build();
+    public static final StructuredTableSpecification OPERATIONS_SPEC =
+      new StructuredTableSpecification.Builder()
+        .withId(OPERATIONS_TABLE)
+        .withFields(Fields.longType(CHECKSUM_FIELD),
+                    Fields.stringType(OPERATIONS_FIELD))
+        .withPrimaryKeys(CHECKSUM_FIELD)
+        .build();
+    public static final StructuredTableSpecification DESTINATION_FIELDS_SPEC =
+      new StructuredTableSpecification.Builder()
+        .withId(DESTINATION_FIELDS_TABLE)
+        .withFields(Fields.longType(CHECKSUM_FIELD),
+                    Fields.stringType(ENDPOINT_NAMESPACE_FIELD),
+                    Fields.stringType(ENDPOINT_NAME_FIELD),
+                    Fields.stringType(DESTINATION_DATA_FIELD))
+        .withPrimaryKeys(CHECKSUM_FIELD, ENDPOINT_NAMESPACE_FIELD, ENDPOINT_NAME_FIELD)
+        .build();
+    public static final StructuredTableSpecification SUMMARY_FIELDS_SPEC =
+      new StructuredTableSpecification.Builder()
+        .withId(SUMMARY_FIELDS_TABLE)
+        .withFields(Fields.longType(CHECKSUM_FIELD),
+                    Fields.stringType(DIRECTION_FIELD),
+                    Fields.stringType(ENDPOINT_NAMESPACE_FIELD),
+                    Fields.stringType(ENDPOINT_NAME_FIELD),
+                    Fields.stringType(ENDPOINT_FIELD),
+                    Fields.stringType(DESTINATION_DATA_FIELD))
+        .withPrimaryKeys(CHECKSUM_FIELD, DIRECTION_FIELD, ENDPOINT_NAMESPACE_FIELD, ENDPOINT_NAME_FIELD,
+                         ENDPOINT_FIELD)
+        .build();
+
+    public static void createTables(StructuredTableAdmin tableAdmin) throws IOException, TableAlreadyExistsException {
+      tableAdmin.create(ENDPOINT_CHECKSUM_SPEC);
+      tableAdmin.create(OPERATIONS_SPEC);
+      tableAdmin.create(DESTINATION_FIELDS_SPEC);
+      tableAdmin.create(SUMMARY_FIELDS_SPEC);
     }
   }
 }

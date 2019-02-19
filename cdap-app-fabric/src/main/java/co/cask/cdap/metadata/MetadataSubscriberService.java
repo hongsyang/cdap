@@ -34,8 +34,8 @@ import co.cask.cdap.data2.dataset2.DatasetFramework;
 import co.cask.cdap.data2.dataset2.MultiThreadDatasetCache;
 import co.cask.cdap.data2.metadata.dataset.MetadataDataset;
 import co.cask.cdap.data2.metadata.lineage.LineageTable;
-import co.cask.cdap.data2.metadata.lineage.field.FieldLineageDataset;
 import co.cask.cdap.data2.metadata.lineage.field.FieldLineageInfo;
+import co.cask.cdap.data2.metadata.lineage.field.FieldLineageTable;
 import co.cask.cdap.data2.metadata.store.MetadataStore;
 import co.cask.cdap.data2.metadata.writer.DataAccessLineage;
 import co.cask.cdap.data2.metadata.writer.MetadataMessage;
@@ -106,7 +106,6 @@ public class MetadataSubscriberService extends AbstractMessagingSubscriberServic
   private final MultiThreadMessagingContext messagingContext;
   private final TransactionRunner transactionRunner;
 
-  private DatasetId fieldLineageDatasetId = FieldLineageDataset.FIELD_LINEAGE_DATASET_ID;
   private DatasetId usageDatasetId = UsageDataset.USAGE_INSTANCE_ID;
 
   @Inject
@@ -208,7 +207,7 @@ public class MetadataSubscriberService extends AbstractMessagingSubscriberServic
           case LINEAGE:
             return new DataAccessLineageProcessor();
           case FIELD_LINEAGE:
-            return new FieldLineageProcessor(datasetContext);
+            return new FieldLineageProcessor();
           case USAGE:
             return new UsageProcessor(datasetContext);
           case WORKFLOW_TOKEN:
@@ -268,12 +267,8 @@ public class MetadataSubscriberService extends AbstractMessagingSubscriberServic
    */
   private final class FieldLineageProcessor implements MetadataMessageProcessor {
 
-    private final FieldLineageDataset fieldLineageDataset;
+    FieldLineageProcessor() {}
 
-    FieldLineageProcessor(DatasetContext datasetContext) {
-      this.fieldLineageDataset = FieldLineageDataset.getFieldLineageDataset(datasetContext, datasetFramework,
-                                                                            fieldLineageDatasetId);
-    }
 
     @Override
     public void processMessage(MetadataMessage message) {
@@ -291,7 +286,10 @@ public class MetadataSubscriberService extends AbstractMessagingSubscriberServic
                  message, t);
         return;
       }
-      fieldLineageDataset.addFieldLineageInfo(programRunId, info);
+      TransactionRunners.run(transactionRunner, context -> {
+        FieldLineageTable fieldLineageTable = FieldLineageTable.create(context);
+        fieldLineageTable.addFieldLineageInfo(programRunId, info);
+      });
     }
   }
 

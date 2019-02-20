@@ -35,7 +35,6 @@ import co.cask.cdap.store.DefaultNamespaceStore;
 import co.cask.cdap.store.StoreDefinition;
 import com.google.inject.Injector;
 import com.opentable.db.postgres.embedded.EmbeddedPostgres;
-import org.apache.tephra.TransactionSystemClient;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;

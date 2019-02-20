@@ -38,6 +38,7 @@ import co.cask.cdap.internal.app.runtime.service.SimpleRuntimeInfo;
 import co.cask.cdap.internal.app.services.http.AppFabricTestBase;
 import co.cask.cdap.internal.app.store.DefaultStore;
 import co.cask.cdap.internal.app.store.RunRecordMeta;
+import co.cask.cdap.master.spi.program.RuntimeInfo;
 import co.cask.cdap.proto.BasicThrowable;
 import co.cask.cdap.proto.DatasetSpecificationSummary;
 import co.cask.cdap.proto.NotRunningProgramLiveInfo;

@@ -35,8 +35,6 @@ import com.opentable.db.postgres.embedded.EmbeddedPostgres;
 import org.apache.twill.filesystem.LocationFactory;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
-import org.junit.ClassRule;
-import org.junit.rules.TemporaryFolder;
 
 import java.io.IOException;
 import javax.sql.DataSource;

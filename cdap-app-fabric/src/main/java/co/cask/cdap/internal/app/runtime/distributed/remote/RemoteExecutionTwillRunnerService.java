@@ -62,6 +62,7 @@ import co.cask.cdap.runtime.spi.ssh.SSHKeyPair;
 import co.cask.cdap.runtime.spi.ssh.SSHSession;
 import co.cask.cdap.security.tools.KeyStores;
 import co.cask.cdap.spi.data.transaction.TransactionRunner;
+import co.cask.cdap.spi.data.transaction.TransactionRunners;
 import co.cask.common.http.HttpRequestConfig;
 import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableMap;
@@ -134,9 +135,7 @@ public class RemoteExecutionTwillRunnerService implements TwillRunnerService {
   private final CConfiguration cConf;
   private final Configuration hConf;
   private final LocationFactory locationFactory;
-  private final DatasetFramework datasetFramework;
   private final ConcurrentMap<ProgramRunId, RemoteExecutionTwillController> controllers;
-  private final Transactional transactional;
   private final MultiThreadMessagingContext messagingContext;
   private final RemoteExecutionLogProcessor logProcessor;
   private final MetricsCollectionService metricsCollectionService;
@@ -153,7 +152,6 @@ public class RemoteExecutionTwillRunnerService implements TwillRunnerService {
   @Inject
   RemoteExecutionTwillRunnerService(CConfiguration cConf, Configuration hConf,
                                     LocationFactory locationFactory, MessagingService messagingService,
-                                    DatasetFramework datasetFramework, TransactionSystemClient txClient,
                                     RemoteExecutionLogProcessor logProcessor,
                                     MetricsCollectionService metricsCollectionService,
                                     ProvisioningService provisioningService, ProgramStateWriter programStateWriter,
@@ -162,15 +160,7 @@ public class RemoteExecutionTwillRunnerService implements TwillRunnerService {
     this.hConf = hConf;
     this.locationFactory = locationFactory;
     this.messagingContext = new MultiThreadMessagingContext(messagingService);
-    this.datasetFramework = datasetFramework;
-    this.transactional = Transactions.createTransactionalWithRetry(
-      Transactions.createTransactional(new MultiThreadDatasetCache(
-        new SystemDatasetInstantiator(datasetFramework), new TransactionSystemClientAdapter(txClient),
-        NamespaceId.SYSTEM, Collections.emptyMap(), null, null, messagingContext)),
-      org.apache.tephra.RetryStrategies.retryOnConflict(20, 100)
-    );
     this.transactionRunner = transactionRunner;
-
     this.controllers = new ConcurrentHashMap<>();
     this.logProcessor = logProcessor;
     this.metricsCollectionService = metricsCollectionService;
@@ -377,7 +367,6 @@ public class RemoteExecutionTwillRunnerService implements TwillRunnerService {
       ProfileMetricService profileMetricsService = createProfileMetricsService(key, programOptions,
                                                                                clusterKeyInfo.getCluster());
       RuntimeMonitor runtimeMonitor = new RuntimeMonitor(key, cConf, runtimeMonitorClient,
-                                                         datasetFramework, transactional,
                                                          messagingContext, monitorScheduler, logProcessor,
                                                          profileMetricsService,
                                                          remoteProcessController, programStateWriter,
@@ -444,8 +433,8 @@ public class RemoteExecutionTwillRunnerService implements TwillRunnerService {
     try {
       while (!completed) {
         // Scan the dataset and update the controllers map. Retry on all exception.
-        completed = Retries.callWithRetries(() -> Transactionals.execute(transactional, context -> {
-          RemoteRuntimeDataset dataset = RemoteRuntimeDataset.create(context, datasetFramework);
+        completed = Retries.callWithRetries(() -> TransactionRunners.run(transactionRunner, context -> {
+          RemoteRuntimeTable dataset = RemoteRuntimeTable.create(context);
           List<Map.Entry<ProgramRunId, ProgramOptions>> scanResult = dataset.scan(limit, lastProgramRunId.get());
           for (Map.Entry<ProgramRunId, ProgramOptions> entry : scanResult) {
             ProgramRunId programRunId = entry.getKey();
@@ -472,21 +461,21 @@ public class RemoteExecutionTwillRunnerService implements TwillRunnerService {
   }
 
   /**
-   * Persists running state to the {@link RemoteRuntimeDataset}.
+   * Persists running state to the {@link RemoteRuntimeTable}.
    */
   private void persistRunningState(ProgramRunId programRunId, ProgramOptions programOptions) {
     // Only retry for a max of 5 seconds. If it still failed to persist, it will fail to launch the program.
     RetryStrategy retryStrategy = RetryStrategies.timeLimit(5L, TimeUnit.SECONDS,
                                                             RetryStrategies.exponentialDelay(100L, 1000L,
                                                                                              TimeUnit.MILLISECONDS));
-    Retries.runWithRetries(() -> Transactionals.execute(transactional, context -> {
-      RemoteRuntimeDataset dataset = RemoteRuntimeDataset.create(context, datasetFramework);
+    Retries.runWithRetries(() -> TransactionRunners.run(transactionRunner, context -> {
+      RemoteRuntimeTable dataset = RemoteRuntimeTable.create(context);
       dataset.write(programRunId, programOptions);
     }, RetryableException.class), retryStrategy);
   }
 
   /**
-   * Deletes the running state from the {@link RemoteRuntimeDataset}.
+   * Deletes the running state from the {@link RemoteRuntimeTable}.
    */
   private void deleteRunningState(ProgramRunId programRunId) {
     try {
@@ -494,8 +483,8 @@ public class RemoteExecutionTwillRunnerService implements TwillRunnerService {
       // the state transition logic will have it cleared.
       // The deletion is only needed when successfully write the states to dataset, but failed to run the launch script
       // remote, which should be rare.
-      Transactionals.execute(transactional, context -> {
-        RemoteRuntimeDataset dataset = RemoteRuntimeDataset.create(context, datasetFramework);
+      TransactionRunners.run(transactionRunner, context -> {
+        RemoteRuntimeTable dataset = RemoteRuntimeTable.create(context);
         dataset.delete(programRunId);
       });
     } catch (Exception e) {

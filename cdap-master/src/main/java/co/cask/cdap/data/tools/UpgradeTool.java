@@ -57,7 +57,6 @@ import co.cask.cdap.data2.util.hbase.HBaseTableUtil;
 import co.cask.cdap.explore.guice.ExploreClientModule;
 import co.cask.cdap.internal.app.runtime.schedule.queue.JobQueueDataset;
 import co.cask.cdap.internal.app.runtime.schedule.store.ProgramScheduleStoreDataset;
-import co.cask.cdap.internal.app.runtime.schedule.store.ScheduleStoreTableUtil;
 import co.cask.cdap.internal.app.store.DefaultStore;
 import co.cask.cdap.logging.guice.KafkaLogAppenderModule;
 import co.cask.cdap.logging.meta.LoggingStoreTableUtil;
@@ -469,8 +468,6 @@ public class UpgradeTool {
     DefaultStore.setupDatasets(datasetFramework);
     // logs metadata
     LoggingStoreTableUtil.setupDatasets(datasetFramework);
-    // scheduler metadata
-    ScheduleStoreTableUtil.setupDatasets(datasetFramework);
 
     // Usage registry
     UsageDataset.setupDatasets(datasetFramework);
